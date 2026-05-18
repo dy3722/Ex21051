@@ -6,33 +6,25 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    tools:context=".MainActivity" >
+    tools:context=".CreditsActivity">
 
-    <TextView
+    <ImageView
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:gravity="center"
-        android:text="Your expense list:"
-        android:textColor="#3F51B5"
-        android:textSize="30dp"
-        android:textStyle="bold|italic" />
+        app:srcCompat="@android:drawable/btn_star_big_on" />
 
     <TextView
-        android:id="@+id/tvAmount"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="3.5"
+        android:layout_weight="2"
         android:gravity="center"
-        android:text="The amount of your expenses:\n0 ₪"
-        android:textColor="#90492C"
-        android:textSize="40dp"
-        android:textStyle="bold" />
+        android:text="Thanks to: Albert Levy \n And to: David Yusupov"
+        android:textSize="35dp" />
 
-    <ListView
-        android:id="@+id/lvExpenses"
+    <ImageView
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="9" />
-
+        android:layout_weight="1"
+        app:srcCompat="@android:drawable/btn_star_big_on" />
 </LinearLayout>
