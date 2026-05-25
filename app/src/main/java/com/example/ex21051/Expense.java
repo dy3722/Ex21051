@@ -9,11 +9,16 @@ package com.example.ex21051;
  * Represents a single expense entity with properties for ID, description, amount, category, and date.
  */
 public class Expense {
-    private int id;
+    private String id;
     private String description;
     private double amount;
     private String category;
     private String date;
+
+    /**
+     * Default constructor
+     */
+    public Expense() {}
 
     /**
      * Constructor for creating a new Expense without an ID (e.g., before inserting to DB).
@@ -39,7 +44,7 @@ public class Expense {
      * @param category The category to which the expense belongs.
      * @param date The date of the expense (format: YYYY-MM-DD).
      */
-    public Expense(int id, String description, double amount, String category, String date) {
+    public Expense(String id, String description, double amount, String category, String date) {
         this.id = id;
         this.description = description;
         this.amount = amount;
@@ -47,11 +52,11 @@ public class Expense {
         this.date = date;
     }
 
-    public int getId() {
+    public String getId() {
         return id;
     }
 
-    public void setId(int id) {
+    public void setId(String id) {
         this.id = id;
     }
 

@@ -1,12 +1,9 @@
 package com.example.ex21051;
 
 import android.app.DatePickerDialog;
-import android.content.ContentValues;
-import android.content.Context;
+import android.app.ProgressDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.database.Cursor;
-import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
 import android.text.InputType;
 import android.util.Log;
@@ -24,14 +21,13 @@ import android.widget.ListView;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
-
-import androidx.activity.EdgeToEdge;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
+
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.ValueEventListener;
 
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -48,10 +44,7 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
     private int clickPos;
     private ListView lvExpenses;
     private List<Expense> expensesList;
-    private SQLiteDatabase db;
-    private HelperDB hlp;
-    private Cursor crsr;
-    private ArrayAdapter adp;
+    private List<String> expensesKeysList;
     private TextView tvAmount;
     private final Calendar calendar = Calendar.getInstance();
     private double monthAmount = 0;
@@ -74,10 +67,7 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
         setContentView(R.layout.activity_main);
 
         expensesList = new ArrayList<>();
-
-        hlp = new HelperDB(this);
-        db = hlp.getWritableDatabase();
-        db.close();
+        expensesKeysList = new ArrayList<>();
 
         siCred = new Intent(this, CreditsActivity.class);
         siAddExpense = new Intent(this, AddExpenseActivity.class);
@@ -102,46 +92,48 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
         super.onResume();
 
         expensesList.clear();
+        expensesKeysList.clear();
+
         monthAmount = 0;
 
-        db = hlp.getReadableDatabase();
+        ProgressDialog pd = new ProgressDialog(this);
+        pd.setTitle("Connecting...");
+        pd.setMessage("Please wait");
+        pd.show();
 
-        crsr = db.query(Expenses.TABLE_EXPENSES, null, null, null, null, null, null);
+        FBref.refExpenses.addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                expensesList.clear();
+                expensesKeysList.clear();
 
-        int colId = crsr.getColumnIndex(Expenses.KEY_ID);
-        int colAmount = crsr.getColumnIndex(Expenses.AMOUNT);
-        int colDate = crsr.getColumnIndex(Expenses.DATE);
-        int colCategory = crsr.getColumnIndex(Expenses.CATEGORY);
-        int colDescription = crsr.getColumnIndex(Expenses.DESCRIPTION);
+                pd.dismiss();
 
-        crsr.moveToFirst();
-        while (!crsr.isAfterLast())
-        {
-            int id = crsr.getInt(colId);
-            double amount = crsr.getDouble(colAmount);
-            String date = crsr.getString(colDate);
-            String category = crsr.getString(colCategory);
-            String description = crsr.getString(colDescription);
+                for (DataSnapshot data : snapshot.getChildren())
+                {
+                    String stKey = (String) data.getKey();
+                    expensesKeysList.add(stKey);
 
-            if (Integer.parseInt(date.substring(5,7))-1 == calendar.get(Calendar.MONTH))
-            {
-                monthAmount += amount;
+                    Expense exp = data.getValue(Expense.class);
+                    expensesList.add(exp);
+
+                    if (Integer.parseInt(exp.getDate().substring(5,7))-1 == calendar.get(Calendar.MONTH))
+                    {
+                        monthAmount += exp.getAmount();
+                    }
+                }
+
+                tvAmount.setText("The amount of your expenses:\n" + formatClearNumber(monthAmount) + "₪");
+
+                customAdapter = new CustomAdapter(MainActivity.this, expensesList);
+                lvExpenses.setAdapter(customAdapter);
             }
 
-            Expense expense = new Expense(id, description, amount, category, date);
-
-            expensesList.add(expense);
-
-            crsr.moveToNext();
-        }
-
-        crsr.close();
-        db.close();
-
-        tvAmount.setText("The amount of your expenses:\n" + formatClearNumber(monthAmount) + "₪");
-
-        customAdapter = new CustomAdapter(this, expensesList);
-        lvExpenses.setAdapter(customAdapter);
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+                Toast.makeText(MainActivity.this, "Something went wrong", Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     /**
@@ -253,13 +245,11 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
         String op = item.getTitle().toString();
         if (op.equals("Delete"))
         {
-            int idToDelete = expensesList.get(clickPos).getId();
+            String idToDelete = expensesList.get(clickPos).getId();
 
-            Log.i("SQL_LOG", "Deleting Expense with ID: " + idToDelete);
+            Log.i("FIREBASE_LOG", "Deleting Expense with ID: " + idToDelete);
 
-            db = hlp.getWritableDatabase();
-            db.delete(Expenses.TABLE_EXPENSES, Expenses.KEY_ID + "=?", new String[] {Integer.toString(idToDelete)});
-            db.close();
+            FBref.refExpenses.child(idToDelete).removeValue();
 
             onResume();
         }
@@ -344,16 +334,9 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
                         String description = etAlertDescription.getText().toString();
                         String date = btnAlertDate.getText().toString();
 
-                        ContentValues cv = new ContentValues();
+                        Expense exp = new Expense(expensesList.get(clickPos).getId(), description, amount, strSelectedCategory, date);
 
-                        cv.put(Expenses.AMOUNT, amount);
-                        cv.put(Expenses.CATEGORY, strSelectedCategory);
-                        cv.put(Expenses.DATE, date);
-                        cv.put(Expenses.DESCRIPTION, description);
-
-                        db = hlp.getWritableDatabase();
-                        db.update(Expenses.TABLE_EXPENSES, cv, Expenses.KEY_ID + "=?", new String[] {Integer.toString(expensesList.get(clickPos).getId())});
-                        db.close();
+                        FBref.refExpenses.child(exp.getId()).setValue(exp);
 
                         onResume();
                     }

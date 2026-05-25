@@ -1,8 +1,7 @@
 package com.example.ex21051;
 
+import android.app.ProgressDialog;
 import android.content.Intent;
-import android.database.Cursor;
-import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Menu;
@@ -14,10 +13,15 @@ import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.Spinner;
 import android.widget.TextView;
+import android.widget.Toast;
 import android.widget.ToggleButton;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.ValueEventListener;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -31,15 +35,13 @@ import java.util.List;
  */
 public class SearchActivity extends AppCompatActivity implements AdapterView.OnItemSelectedListener{
     private Intent siCred, siAddExpense;
-    private SQLiteDatabase db;
-    private HelperDB hlp;
     private final String[] categories = {"All", "Restaurant", "Recreation", "Shopping", "Transferring money", "Buying online", "Other..."};
     private Spinner spCategoryFilter;
     private String strSelectedCategory;
     private EditText etMaxAmountFilter, etMinAmountFilter, etDescriptionSearch;
     private TextView tvInfoToUserSearch;
     private List<Expense> toSortExpenseList;
-    private Cursor crsr;
+    private List<String> toSortExpenseKeysList;
     private ToggleButton tbSortType;
     private CustomAdapter customAdapter;
     private ListView lvSorted;
@@ -59,10 +61,6 @@ public class SearchActivity extends AppCompatActivity implements AdapterView.OnI
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_search);
 
-        hlp = new HelperDB(this);
-        db = hlp.getWritableDatabase();
-        db.close();
-
         siCred = new Intent(this, CreditsActivity.class);
         siAddExpense = new Intent(this, AddExpenseActivity.class);
         spCategoryFilter = findViewById(R.id.spCategoryFilter);
@@ -74,6 +72,7 @@ public class SearchActivity extends AppCompatActivity implements AdapterView.OnI
         lvSorted = findViewById(R.id.lvSorted);
 
         toSortExpenseList = new ArrayList<>();
+        toSortExpenseKeysList = new ArrayList<>();
 
         ArrayAdapter<String> adp = new ArrayAdapter<String>(this, androidx.appcompat.R.layout.support_simple_spinner_dropdown_item, categories);
         spCategoryFilter.setAdapter(adp);
@@ -100,6 +99,7 @@ public class SearchActivity extends AppCompatActivity implements AdapterView.OnI
             else
             {
                 Collections.swap(toSortExpenseList, pos, pos-1);
+                Collections.swap(toSortExpenseKeysList, pos, pos-1);
                 pos--;
             }
         }
@@ -115,6 +115,8 @@ public class SearchActivity extends AppCompatActivity implements AdapterView.OnI
     {
         int pos = 0;
         int size = toSortExpenseList.size();
+
+        if (size == 1) return;
 
         while (pos < size)
         {
@@ -132,6 +134,7 @@ public class SearchActivity extends AppCompatActivity implements AdapterView.OnI
             else
             {
                 Collections.swap(toSortExpenseList, pos, pos-1);
+                Collections.swap(toSortExpenseKeysList, pos, pos-1);
                 pos--;
             }
         }
@@ -239,85 +242,85 @@ public class SearchActivity extends AppCompatActivity implements AdapterView.OnI
             tvInfoToUserSearch.setText("");
 
             toSortExpenseList.clear();
+            toSortExpenseKeysList.clear();
 
-            db = hlp.getReadableDatabase();
+            ProgressDialog pd = new ProgressDialog(this);
+            pd.setTitle("Connecting...");
+            pd.setMessage("Please wait");
+            pd.show();
 
-            crsr = db.query(Expenses.TABLE_EXPENSES, null, null, null, null, null, null);
+            FBref.refExpenses.addListenerForSingleValueEvent(new ValueEventListener() {
+                @Override
+                public void onDataChange(@NonNull DataSnapshot snapshot) {
+                    toSortExpenseList.clear();
+                    toSortExpenseKeysList.clear();
 
-            int colId = crsr.getColumnIndex(Expenses.KEY_ID);
-            int colAmount = crsr.getColumnIndex(Expenses.AMOUNT);
-            int colDate = crsr.getColumnIndex(Expenses.DATE);
-            int colCategory = crsr.getColumnIndex(Expenses.CATEGORY);
-            int colDescription = crsr.getColumnIndex(Expenses.DESCRIPTION);
+                    pd.dismiss();
 
-            crsr.moveToFirst();
-            while (!crsr.isAfterLast())
-            {
-                int id = crsr.getInt(colId);
-                double amount = crsr.getDouble(colAmount);
-                String date = crsr.getString(colDate);
-                String category = crsr.getString(colCategory);
-                String description = crsr.getString(colDescription);
-
-                Expense expense = new Expense(id, description, amount, category, date);
-
-                toSortExpenseList.add(expense);
-
-                crsr.moveToNext();
-            }
-
-            crsr.close();
-            db.close();
-
-            for (int i = 0 ; i < toSortExpenseList.size() ; i++)
-            {
-                if (toSortExpenseList.get(i).getAmount() < minAmount || toSortExpenseList.get(i).getAmount() > maxAmount)
-                {
-                    toSortExpenseList.remove(i);
-                    i--;
-                }
-            }
-
-            if (tbSortType.isChecked()) // Sort by date
-            {
-                startToSortExpenseListByDate();
-            }
-            else // Sort by amount
-            {
-                startToSortExpenseListByAmount();
-            }
-
-            for (int i = 0 ; i < toSortExpenseList.size() ; i++)
-            {
-                if (strSelectedCategory.equals("All"))
-                {
-                    break;
-                }
-                else if (!toSortExpenseList.get(i).getCategory().equals(strSelectedCategory))
-                {
-                    toSortExpenseList.remove(i);
-                    i--;
-                }
-            }
-
-            if (!etDescriptionSearch.getText().toString().isEmpty())
-            {
-                for (int i = 0 ; i < toSortExpenseList.size() ; i++)
-                {
-
-                    String description = etDescriptionSearch.getText().toString();
-
-                    if (!toSortExpenseList.get(i).getDescription().contains(description))
+                    for (DataSnapshot data : snapshot.getChildren())
                     {
-                        toSortExpenseList.remove(i);
-                        i--;
+                        String stKey = (String) data.getKey();
+                        toSortExpenseKeysList.add(stKey);
+
+                        Expense exp = data.getValue(Expense.class);
+                        toSortExpenseList.add(exp);
+
+                        for (int i = 0 ; i < toSortExpenseList.size() ; i++)
+                        {
+                            if (toSortExpenseList.get(i).getAmount() < minAmount || toSortExpenseList.get(i).getAmount() > maxAmount)
+                            {
+                                toSortExpenseList.remove(i);
+                                i--;
+                            }
+                        }
+
+                        if (tbSortType.isChecked()) // Sort by date
+                        {
+                            startToSortExpenseListByDate();
+                        }
+                        else // Sort by amount
+                        {
+                            startToSortExpenseListByAmount();
+                        }
+
+                        for (int i = 0 ; i < toSortExpenseList.size() ; i++)
+                        {
+                            if (strSelectedCategory.equals("All"))
+                            {
+                                break;
+                            }
+                            else if (!toSortExpenseList.get(i).getCategory().equals(strSelectedCategory))
+                            {
+                                toSortExpenseList.remove(i);
+                                i--;
+                            }
+                        }
+
+                        if (!etDescriptionSearch.getText().toString().isEmpty())
+                        {
+                            for (int i = 0 ; i < toSortExpenseList.size() ; i++)
+                            {
+
+                                String description = etDescriptionSearch.getText().toString();
+
+                                if (!toSortExpenseList.get(i).getDescription().contains(description))
+                                {
+                                    toSortExpenseList.remove(i);
+                                    i--;
+                                }
+                            }
+                        }
+
+                        customAdapter = new CustomAdapter(SearchActivity.this, toSortExpenseList);
+                        lvSorted.setAdapter(customAdapter);
                     }
                 }
-            }
 
-
-            customAdapter = new CustomAdapter(this, toSortExpenseList);
-            lvSorted.setAdapter(customAdapter);
+                @Override
+                public void onCancelled(@NonNull DatabaseError error) {
+                    Toast.makeText(SearchActivity.this, "Something went wrong", Toast.LENGTH_SHORT).show();
+                }
+            });
         }
     }
 }

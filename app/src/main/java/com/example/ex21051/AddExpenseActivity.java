@@ -1,9 +1,7 @@
 package com.example.ex21051;
 
 import android.app.DatePickerDialog;
-import android.content.ContentValues;
 import android.content.Intent;
-import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Menu;
@@ -31,8 +29,6 @@ public class AddExpenseActivity extends AppCompatActivity implements AdapterView
     private Intent siCred, siSearch;
     private String strDate, strSelectedCategory;
     private TextView tvShowDate, tvInfoToUser;
-    private SQLiteDatabase db;
-    private HelperDB hlp;
     private final String[] categories = {"Restaurant", "Recreation", "Shopping", "Transferring money", "Buying online", "Other..."};
     private Spinner spCategory;
     private EditText etAmount, etDescription;
@@ -50,10 +46,6 @@ public class AddExpenseActivity extends AppCompatActivity implements AdapterView
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_add_expense);
-
-        hlp = new HelperDB(this);
-        db = hlp.getWritableDatabase();
-        db.close();
 
         siCred = new Intent(this, CreditsActivity.class);
         siSearch = new Intent(this, SearchActivity.class);
@@ -183,18 +175,12 @@ public class AddExpenseActivity extends AppCompatActivity implements AdapterView
             String description = etDescription.getText().toString();
             String date = tvShowDate.getText().toString();
 
-            ContentValues cv = new ContentValues();
+            Expense expense = new Expense(description, amount, strSelectedCategory, date);
+            String stKey = FBref.refExpenses.push().getKey();
+            expense.setId(stKey);
+            FBref.refExpenses.child(stKey).setValue(expense);
 
-            cv.put(Expenses.AMOUNT, amount);
-            cv.put(Expenses.CATEGORY, strSelectedCategory);
-            cv.put(Expenses.DATE, date);
-            cv.put(Expenses.DESCRIPTION, description);
-
-            Log.i("SQL_LOG", "Inserting Expense: " + cv.toString());
-
-            db = hlp.getWritableDatabase();
-            db.insert(Expenses.TABLE_EXPENSES, null, cv);
-            db.close();
+            Log.i("FIREBASE_LOG", "Inserting Expense: " + expense.getId() + ", " + expense.getDescription() + ", " + expense.getCategory() + ", " + expense.getDate() + ", " + expense.getAmount());
 
             finish();
         }
